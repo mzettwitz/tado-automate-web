@@ -97,7 +97,7 @@ environment:
 
 3. Set your duckdns domain in `Caddyfile`: 
 
-```json
+```
 yourdomain.duckdns.org {
 ```
 
@@ -205,6 +205,8 @@ You have to change the Automate script in two nodes:
 ```http
 PUT https://yourdomain.duckdns.org:8765/heater/off
 Headers: X-API-KEY: supersecret
+```
+```
 Optional query parameter: ?zone=LivingRoom
 ```
 
