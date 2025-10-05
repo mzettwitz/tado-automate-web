@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    image: tado-automate-web-api
+    container_name: tado-automate-web-api-container
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+    - API_KEY=yoursupersecretkey                      # <-- replace!
+    - TZ=Europe/Berlin                                # <-- replace!
+    volumes:
+      - tado_token:/tado_token   
+      - ./logs:/logs                                  # persistent logs (if wanted)
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: caddy-custom
+    container_name: tado-caddy-container
+    restart: unless-stopped
+    ports:
+      # - "80:80"                                     # not recommended since HTTPS is available
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    environment:
+      - DUCKDNS_TOKEN=your_duckdns_token              # <-- replace!
+
+volumes:
+  caddy_data:
+  caddy_config:
+  tado_token:
+    driver: local

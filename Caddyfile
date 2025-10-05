@@ -1,0 +1,14 @@
+yourdomain.duckdns.org {
+    rate_limit {
+        zone limit_remote {
+            key    {remote_host}
+            events 5
+            window 30s
+        }
+        log_key
+    }
+    tls {
+        dns duckdns {env.DUCKDNS_TOKEN}
+    }
+    reverse_proxy api:8000
+}
