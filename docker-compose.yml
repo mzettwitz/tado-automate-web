@@ -6,8 +6,8 @@ services:
     image: tado-automate-web-api
     container_name: tado-automate-web-api-container
     restart: unless-stopped
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     environment:
     - API_KEY=yoursupersecretkey                      # <-- replace!
     - TZ=Europe/Berlin                                # <-- replace!

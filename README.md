@@ -1,7 +1,7 @@
 # Tado Automate Web ☕🤖
 
 A minimal REST API for controlling Tado heating devices, designed for integration with automation apps like Automate on Android.  
-This project allows you to turn heating on/off based on open window detection, with secure access via API key and HTTPS using Caddy and DuckDNS. 
+This project allows you to turn heating on/off based on open window detection and set home/away mode using geofencing. The communication has secure access via API key and HTTPS using Caddy and DuckDNS. 
 For easier integration, a docker file is provided. Based on the [PyTado fork](https://github.com/wmalgadey/PyTado).  
 All services in this project are free to use.
 
@@ -12,7 +12,7 @@ Author: Martin Zettwitz @mzettwitz
 
 ## 🔀 Workflow  
 
-🏠 Tado detects open window  
+🏠 Tado detects open window or geofencing  
 &nbsp;&nbsp;&nbsp;&nbsp;  ↓  
 📲 Push notification to phone by Tado app  
 &nbsp;&nbsp;&nbsp;&nbsp;  ↓  
@@ -34,8 +34,9 @@ Author: Martin Zettwitz @mzettwitz
 
 ## 🚀 Features
 
-* Set set open window for a specific zone or automatically detect open windows
+* Set open window for a specific zone or automatically detect open windows
 * Turn heating on for a specific zone
+* Set home mode to home or away based on geofencing
 * Secure access using auth header
 * HTTPS support via Caddy and DuckDNS
 * Rate limiting in Caddy for HTTP requests
@@ -49,6 +50,7 @@ Author: Martin Zettwitz @mzettwitz
 tado_automate_web/
  ├── api/
  │    └── main.py             # FastAPI application
+ ├── doc/                     # Images for ReadMe
  ├── Dockerfile               # Docker build file for automation
  ├── Dockerfile.caddy         # Docker build file for caddy reverse proxy
  ├── docker-compose.yml       # Docker Compose configuration
@@ -68,6 +70,7 @@ tado_automate_web/
 * Portforwarding in your router
 * Ports in your docker host are available and not blocked by another application (e.g. pihole)
 * [Automate](https://llamalab.com/automate/) installed on your Android phone
+* Open window detection and geofencing activated in Tado
 
 
 > Note, you do not need to use duckdns and expose your container at all. You can also use it in your local network only. 
@@ -110,7 +113,7 @@ docker compose up -d --build
 ```
 
 > Note, on first startup, you need to register Tado. The login URL is shown in the container logs. 
-Therefore, it ist best to start the containers attached without `-d` flag to have the logs in the console.
+Therefore, it is best to start the containers attached without `-d` flag to have the logs in the console.
 
 5. Ensure your router forwards ports (80 optional and) 443 to your host running Docker. You may want to forward a diffent external port to your Caddy local port. 
 E.g. external 8765(web) to 443(docker host).
@@ -121,19 +124,6 @@ E.g. external 8765(web) to 443(docker host).
 Instead of exposing your server to the web, you can use the setup in your local network only. Hence, it will only work, when your phone is in the same network as the docker host. 
 A VPN might be a solution for you if you want the same functionality when you are outside, but want to keep the server local.  
 For the local setup, you just need to make minor changes:  
-- docker-compose.yml: change expose to ports in the tado-container:
-```yaml
-api:
-    build: .
-    image: tado-automate-web-api
-    container_name: tado-automate-web-api-container
-    restart: unless-stopped
-#   expose:
-#     - "8000"
-    ports:
-      - "8000:8000"
-```
-
 - docker-compose.yml: remove (or comment) all caddy parts: 
 ```yaml
 # caddy:
@@ -147,20 +137,37 @@ volumes:
 ```
 
 - Port forwarding in your router is not necessary when serving local only
-- Instead of calling the duckdns domain in your HTTP request, you need to call your local (docker host) ip
+- Activate the localMode in the Automate script (5)
 
 ---
 
 ## 🤖 Automate Integration
 
-This section explains how to trigger the Tado API from the [Automate](https://llamalab.com/automate/) app on Android. Make sure you alter the nodes for your setup and language, see [Necessary Changes](#necessary-modifications-you-need-to-make)!  
+This section explains how to trigger the Tado API from the [Automate](https://llamalab.com/automate/) app on Android. Make sure you alter the nodes for your setup and language.
 Import the file `Tado Automate Web.flo` into Automate on your Android device and start the flow script. Make sure, you allow it to run in background (and energy safe mode).
 
+> The script requires location rights on your phone to check if you are connected with the home wifi. No location information are used, though they are in the same access rights category in Android.
+
 ### Mandatory modifications you need to make
-You have to change the Automate script in two nodes:  
-1. FX Expression check (3rd node): make sure the string "Open window" matches the language (and message!) of your tado app.  
-2. HTTP request (4th node): update the input argument `Requst URL` to your domain (or local ip) and port (local network: docker port (e.g. 8000), web: router exposed port (e.g. 443 or 8765))
-3. HTTP request (4th node): update the `Request headers` to your API key defined in the docker-compose.yml
+You have to change the Automate script in two sections:  
+**a)  Network setup:**  
+1. Set the address of your remote host (DuckDNS domain with external port)  
+2. Set the address of your local host (IP of your docker host with the local port)  
+3. Set the API key that you used in your docker-compose file in [Web Setup](#web-setup)  
+4. Set the wifi network you want to use when you are at home  
+5. (Optional) set the localMode to "true" in case you only want to host your server locally  
+
+> Note, if you want to use a local setup with VPN on your phone, you may set the local address (2) for the web host (1), too, and disable (5).
+
+![Automate Network Setup](./doc/automate_setup.png)
+
+**b) Language setup:**  
+
+6. FX Expression check: make sure the string "open window" matches the language (and message!) of your tado app  
+7. FX Expression check: make sure the string "Away" matches the language (and message!) of your tado app for going away  
+8. FX Expression check: make sure the string "Home" matches the language (and message!) of your tado app for coming home  
+
+![Automate Language Setup](./doc/automate_setup2.png)
 
 ### General Flow
 
@@ -170,19 +177,21 @@ You have to change the Automate script in two nodes:
    * App: Tado
    * Store text in variable
 
-2. **Expression Check: Open windows**
+2. **Expression Check: Network mode**
+
+   * Expression: check if the request should be send locally or via web
+
+3. **Expression Check: Open windows**
 
    * Expression: Tado notification variable contains "open window"
-   * Text contains: "Window opened"` (or custom condition)
-   * We do only check for this small part of the message since multiple windos can be open, and thus, the message changes
+   * We do only check for this small part of the message since multiple windows can be open, and thus, the message changes
+   * If the windows are not open, check for geofencing
 
-3. **Action: HTTP Request**
+4. **Action: HTTP Request**
 
    * Type: `HTTP Request` → `PUT`
    * URL: `https://yourdomain.duckdns.org/heater/off`
-   * Optional: append `?zone=LivingRoom` to target a specific zone.
    * Headers:
-
      ```text
      X-API-KEY: supersecret
      ```
@@ -190,11 +199,12 @@ You have to change the Automate script in two nodes:
    * Follow redirects: No
    * Store response code and content in variable
 
-4. **Expression Check: Response Handling**
+5. **Expression Check: Response Handling**
 
    * HTTP response code is used to check if the request was successful:
    * If true: remove the Tado notification
-   * If false: show a notification with the HTTP response content 
+   * If false: show a notification with the HTTP response content
+   * Log the result
 
 ---
 
@@ -221,6 +231,20 @@ Headers: X-API-KEY: supersecret
 
 ```http
 GET https://yourdomain.duckdns.org:8765/zones
+Headers: X-API-KEY: supersecret
+```
+
+### Geofencing away
+
+```http
+PUT https://yourdomain.duckdns.org:8765/geo/away
+Headers: X-API-KEY: supersecret
+```
+
+### Geofencing home
+
+```http
+PUT https://yourdomain.duckdns.org:8765/geo/home
 Headers: X-API-KEY: supersecret
 ```
 
@@ -272,4 +296,3 @@ Please make sure to test carefully with a clean setup before making a PR.
 ## 👨‍⚖️ License
 
 This project is released under the GPLv3 License. See [LICENSE](LICENSE) for details.
-
